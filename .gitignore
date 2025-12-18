@@ -1,0 +1,22 @@
+# 编译产物
+*.o
+*.ko
+*.so
+*.a
+*.mod
+*.mod.c
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+compile_commands.json
+
+# IDE
+.idea/
+.vscode/
+cmake-build-*/
+
+# 其他
+*.log
+*.swp
+*~
