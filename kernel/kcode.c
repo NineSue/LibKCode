@@ -11,12 +11,12 @@ static struct {
     size_t size;
 }
 whitelist[] = {
-    {KCAP_RB_INSERT,"rb_insert_color",256},
-    {KCAP_RB_ERASE,"rb_erase",512},
-    {KCAP_RB_FIRST,"rb_first",64},
-    {KCAP_RB_LAST,"rb_last",64},
-    {KCAP_RB_NEXT,"rb_next",128},
-    {KCAP_RB_PREV,"rb_prev",128},
+    {KCAP_RB_INSERT,"rb_insert_color",PAGE_SIZE},
+    {KCAP_RB_ERASE,"rb_erase",PAGE_SIZE},
+    {KCAP_RB_FIRST,"rb_first",PAGE_SIZE},
+    {KCAP_RB_LAST,"rb_last",PAGE_SIZE},
+    {KCAP_RB_NEXT,"rb_next",PAGE_SIZE},
+    {KCAP_RB_PREV,"rb_prev",PAGE_SIZE},
     {0,NULL,0},
 };
 
