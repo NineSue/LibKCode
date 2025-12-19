@@ -21,7 +21,10 @@ int main() {
         KCAP_RB_FIRST,
         KCAP_RB_LAST,
         KCAP_RB_NEXT,
-        KCAP_RB_PREV
+        KCAP_RB_PREV,
+        KCAP_RB_FIRST_POSTORDER,
+        KCAP_RB_NEXT_POSTORDER,
+        KCAP_RB_REPLACE
     };
     const char *names[] ={
         "rb_insert_color",
@@ -29,7 +32,10 @@ int main() {
         "rb_first",
         "rb_last",
         "rb_next",
-        "rb_prev"
+        "rb_prev",
+        "rb_first_postorder",
+        "rb_next_postorder",
+        "rb_replace_node"
     };
     int count=sizeof(caps)/sizeof(caps[0]);
 

@@ -15,12 +15,15 @@
 //id
 
 //rbtree.h
-#define KCAP_RB_INSERT  1
-#define KCAP_RB_ERASE   2
-#define KCAP_RB_FIRST   3 //leftmost node
-#define KCAP_RB_LAST    4 //rightmost node
-#define KCAP_RB_NEXT    5
-#define KCAP_RB_PREV    6
+#define KCAP_RB_INSERT          1
+#define KCAP_RB_ERASE           2
+#define KCAP_RB_FIRST           3  // leftmost node
+#define KCAP_RB_LAST            4  // rightmost node
+#define KCAP_RB_NEXT            5
+#define KCAP_RB_PREV            6
+#define KCAP_RB_FIRST_POSTORDER 7  // postorder start
+#define KCAP_RB_NEXT_POSTORDER  8  // postorder next
+#define KCAP_RB_REPLACE         9
 
 
 struct kcode_sym_info {
