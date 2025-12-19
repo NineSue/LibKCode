@@ -9,7 +9,11 @@ include_directories(lib/include kernel)
 # C 库
 file(GLOB LIB_SOURCES "lib/src/*.c")
 if(LIB_SOURCES)
-    add_library(kcode_lib SHARED ${LIB_SOURCES})
+    add_library(kcode_lib SHARED ${LIB_SOURCES}
+            lib/include/kcode.h
+            lib/src/kcode_init.c
+            lib/internal/kcode_internal.h
+            lib/src/kcode_rbtree.c)
     target_link_libraries(kcode_lib pthread)
 endif()
 
@@ -25,5 +29,6 @@ endforeach()
 file(GLOB TEST_KERNEL_SOURCES "tests/kernel/*.c")
 foreach(test_file ${TEST_KERNEL_SOURCES})
     get_filename_component(test_name ${test_file} NAME_WE)
-    add_executable(${test_name} ${test_file})
+    add_executable(${test_name} ${test_file}
+            lib/internal/kcode_internal.h)
 endforeach()

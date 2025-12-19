@@ -1,4 +1,4 @@
-#include "kcode.h"
+#include "kcode_ioctl.h"
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -17,6 +17,9 @@ whitelist[] = {
     {KCAP_RB_LAST,"rb_last",PAGE_SIZE},
     {KCAP_RB_NEXT,"rb_next",PAGE_SIZE},
     {KCAP_RB_PREV,"rb_prev",PAGE_SIZE},
+    {KCAP_RB_FIRST_POSTORDER,"rb_first_postorder",PAGE_SIZE},
+    {KCAP_RB_NEXT_POSTORDER,"rb_next_postorder",PAGE_SIZE},
+    {KCAP_RB_REPLACE,"rb_replace_node",PAGE_SIZE},
     {0,NULL,0},
 };
 
