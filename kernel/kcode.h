@@ -1,8 +1,13 @@
 #ifndef KERNEL_KCODE_H
 #define KERNEL_KCODE_H
 
+#ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#else
+#include <stddef.h>
+#include <sys/ioctl.h>
+#endif
 
 //dev
 #define KCODE_DEVICE_NAME "kcode"
