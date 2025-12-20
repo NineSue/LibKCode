@@ -21,7 +21,7 @@ int main() {
     printf("find 70:    0x%lx\n",kcode_rbtree_find(tree,70));
     printf("find 80:    %s\n", (char *)kcode_rbtree_find(tree, 80));
 
-    //traverse
+    //min & max
     printf("first:      0x%lx\n",kcode_rbtree_first(tree));
     printf("last:       0x%lx\n",kcode_rbtree_last(tree));
 
