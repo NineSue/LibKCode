@@ -1,4 +1,4 @@
-#include  "../../kernel/kcode_ioctl.h"
+#include  "kcode_ioctl.h"
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/unistd.h>

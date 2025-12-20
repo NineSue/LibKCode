@@ -14,6 +14,7 @@ if(LIB_SOURCES)
             lib/src/kcode_init.c
             lib/internal/kcode_internal.h
             lib/src/kcode_rbtree.c)
+    target_include_directories(kcode_lib PRIVATE lib/internal)
     target_link_libraries(kcode_lib pthread)
 endif()
 
@@ -21,7 +22,8 @@ endif()
 file(GLOB TEST_C_SOURCES "tests/c/*.c")
 foreach(test_file ${TEST_C_SOURCES})
     get_filename_component(test_name ${test_file} NAME_WE)
-    add_executable(${test_name} ${test_file})
+    add_executable(${test_name} ${test_file}
+            tests/lib/test_rbtree.c)
     target_link_libraries(${test_name} pthread)
 endforeach()
 
