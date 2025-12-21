@@ -22,7 +22,7 @@ kcode_rbtree_t *kcode_rbtree_new(void) {
 
     tree->root= RB_ROOT;
     tree->count=0;
-    pthread_mutex_init(&tree->lock,NULL);
+    pthread_rwlock_init(&tree->rwlock,NULL);
 
     return tree;
 }
@@ -33,15 +33,15 @@ void kcode_rbtree_free(kcode_rbtree_t *tree) {
     if (!tree)
         return;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_wrlock(&tree->rwlock);
 
     for (node=g_runtime.rb_first_postorder(&tree->root);node;node=next) {
         next=g_runtime.rb_next_postorder(node);
         free(rb_entry(node,struct managed_rb_entry,node));
     }
 
-    pthread_mutex_unlock(&tree->lock);
-    pthread_mutex_destroy(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
+    pthread_rwlock_destroy(&tree->rwlock);
     free(tree);
 }
 
@@ -58,7 +58,7 @@ int kcode_rbtree_insert(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t handle) {
 
     new_entry->key=key;
     new_entry->ref=handle;
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_wrlock(&tree->rwlock);
 
     link=&tree->root.rb_node;
     while (*link) {
@@ -70,7 +70,7 @@ int kcode_rbtree_insert(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t handle) {
         }else if (key>entry->key) {
             link=&parent->rb_right;
         }else {
-            pthread_mutex_unlock(&tree->lock);
+            pthread_rwlock_unlock(&tree->rwlock);
             free(new_entry);
             return KCODE_EXIST;
         }
@@ -82,7 +82,7 @@ int kcode_rbtree_insert(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t handle) {
     //调函数表平衡
     g_runtime.rb_insert_color(&new_entry->node,&tree->root);
     tree->count++;
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
 
     return KCODE_OK;
 }
@@ -94,7 +94,7 @@ kcode_ref_t kcode_rbtree_remove(kcode_rbtree_t *tree, uint64_t key) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_wrlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -110,7 +110,7 @@ kcode_ref_t kcode_rbtree_remove(kcode_rbtree_t *tree, uint64_t key) {
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 
@@ -122,7 +122,7 @@ kcode_ref_t kcode_rbtree_replace(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t 
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_wrlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -136,7 +136,7 @@ kcode_ref_t kcode_rbtree_replace(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t 
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return old_ref;
 }
 
@@ -147,7 +147,7 @@ kcode_ref_t kcode_rbtree_find(kcode_rbtree_t *tree, uint64_t key) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -160,7 +160,7 @@ kcode_ref_t kcode_rbtree_find(kcode_rbtree_t *tree, uint64_t key) {
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 
@@ -171,13 +171,13 @@ kcode_ref_t kcode_rbtree_first(kcode_rbtree_t *tree) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=g_runtime.rb_first(&tree->root);
     if (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
         result=entry->ref;
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
 
     return result;
 }
@@ -189,13 +189,13 @@ kcode_ref_t kcode_rbtree_last(kcode_rbtree_t *tree) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=g_runtime.rb_last(&tree->root);
     if (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
         result=entry->ref;
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
 
     return result;
 }
@@ -208,7 +208,7 @@ kcode_ref_t kcode_rbtree_prev(kcode_rbtree_t *tree,uint64_t key) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -225,7 +225,7 @@ kcode_ref_t kcode_rbtree_prev(kcode_rbtree_t *tree,uint64_t key) {
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 
@@ -237,7 +237,7 @@ kcode_ref_t kcode_rbtree_next(kcode_rbtree_t *tree,uint64_t key) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -254,7 +254,7 @@ kcode_ref_t kcode_rbtree_next(kcode_rbtree_t *tree,uint64_t key) {
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 
@@ -267,13 +267,13 @@ kcode_ref_t kcode_rbtree_first_postorder(kcode_rbtree_t *tree) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=g_runtime.rb_first_postorder(&tree->root);
     if (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
         result=entry->ref;
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 
@@ -285,7 +285,7 @@ kcode_ref_t kcode_rbtree_next_postorder(kcode_rbtree_t *tree,uint64_t key) {
     if (!tree||!g_runtime.inited)
         return 0;
 
-    pthread_mutex_lock(&tree->lock);
+    pthread_rwlock_rdlock(&tree->rwlock);
     node=tree->root.rb_node;
     while (node) {
         entry=rb_entry(node,struct managed_rb_entry,node);
@@ -302,7 +302,7 @@ kcode_ref_t kcode_rbtree_next_postorder(kcode_rbtree_t *tree,uint64_t key) {
             break;
         }
     }
-    pthread_mutex_unlock(&tree->lock);
+    pthread_rwlock_unlock(&tree->rwlock);
     return result;
 }
 

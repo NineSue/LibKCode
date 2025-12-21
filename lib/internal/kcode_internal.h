@@ -28,7 +28,9 @@ struct managed_rb_entry {
 struct kcode_rbtree {
     struct rb_root root;
     size_t count;
-    pthread_mutex_t lock;
+    pthread_rwlock_t rwlock;
+    //原本此处用的mutex，写maple tree的时候发现
+    //可以优化成读写锁，这样读就并行了
 };
 
 //func point 就只用对应kernel的
