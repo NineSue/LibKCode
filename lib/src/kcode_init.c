@@ -10,30 +10,46 @@
 
 struct kcode_runtime g_runtime={.fd = -1,.inited =0};
 
+// 查找或创建页面映射（按 PFN 去重）
+static void *get_or_map_page(unsigned long pfn) {
+    // 检查缓存
+    for (int i = 0; i < g_runtime.cache_count; i++) {
+        if (g_runtime.page_cache[i].pfn == pfn)
+            return g_runtime.page_cache[i].mapped;
+    }
+
+    // 新建映射
+    void *mapped = mmap(NULL, 4096, PROT_READ | PROT_EXEC,
+                        MAP_SHARED, g_runtime.fd, pfn * 4096);
+    if (mapped == MAP_FAILED)
+        return NULL;
+
+    // 存入缓存
+    if (g_runtime.cache_count < 16) {
+        g_runtime.page_cache[g_runtime.cache_count].pfn = pfn;
+        g_runtime.page_cache[g_runtime.cache_count].mapped = mapped;
+        g_runtime.cache_count++;
+    }
+
+    return mapped;
+}
+
 int kcode_map_symbol(int cap_id,void **func_ptr) {
     struct kcode_sym_info info={.cap_id = cap_id};
-    void *mapped;
-    size_t map_len;
 
     if (ioctl(g_runtime.fd,KCODE_IOC_GET_SYM,&info)<0) {
-        perror("[kcode_init] ioctl get symbol failed");
+        perror("[kcode] ioctl get symbol failed");
         return -1;
     }
 
-    map_len=info.len;
-    mapped=mmap(NULL,map_len,PROT_READ|PROT_EXEC,MAP_SHARED,g_runtime.fd,info.pfn*4096);
-
-    if (mapped==MAP_FAILED) {
-        perror("[kcode_init] mmap failed");
+    void *page_base = get_or_map_page(info.pfn);
+    if (!page_base) {
+        perror("[kcode] mmap failed");
         return -1;
     }
 
-    *func_ptr=(void*)((char*)mapped+info.offset);
-    if (g_runtime.mapping_count<64) {
-        g_runtime.mapping[g_runtime.mapping_count++]=mapped;
-    }
-
-    printf("[kcode_init]: capID=%d, func=%p,offset=0x%lx\n", cap_id,*func_ptr,info.offset);
+    *func_ptr = (char *)page_base + info.offset;
+    printf("[kcode]: cap=%d, func=%p (pfn=0x%lx)\n", cap_id, *func_ptr, info.pfn);
     return 0;
 }
 
@@ -78,16 +94,17 @@ int kcode_init(void) {
 }
 
 void kcode_cleanup(void) {
-    for (int i=0;i<g_runtime.mapping_count;i++) {
-        if (g_runtime.mapping[i])
-            munmap(g_runtime.mapping[i],4096);
+    for (int i = 0; i < g_runtime.cache_count; i++) {
+        if (g_runtime.page_cache[i].mapped)
+            munmap(g_runtime.page_cache[i].mapped, 4096);
     }
+    g_runtime.cache_count = 0;
 
-    if (g_runtime.fd>0) {
+    if (g_runtime.fd > 0) {
         close(g_runtime.fd);
-        g_runtime.fd=-1;
+        g_runtime.fd = -1;
     }
 
-    g_runtime.inited=0;
-    printf("[kcode_clean]: cleanup done\n");
+    g_runtime.inited = 0;
+    printf("[kcode]: cleanup done\n");
 }

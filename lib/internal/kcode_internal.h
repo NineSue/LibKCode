@@ -75,8 +75,12 @@ struct kcode_runtime {
     rb_next_postorder_fn rb_next_postorder;
     rb_replace_node_fn rb_replace_node;
 
-    void *mapping[64];
-    int mapping_count;
+    // 页面缓存（按 PFN 去重）
+    struct {
+        unsigned long pfn;
+        void *mapped;
+    } page_cache[16];
+    int cache_count;
 };
 
 extern struct kcode_runtime g_runtime;

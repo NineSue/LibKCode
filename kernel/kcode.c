@@ -95,6 +95,7 @@ static struct miscdevice kcode_device = {
     .minor=MISC_DYNAMIC_MINOR,
     .name = KCODE_DEVICE_NAME,
     .fops = &kcode_fops,
+    .mode=0666,//no sudo
 };
 
 
