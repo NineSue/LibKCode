@@ -20,7 +20,7 @@ static void *get_or_map_page(unsigned long pfn) {
 
     // 新建映射
     void *mapped = mmap(NULL, 4096, PROT_READ | PROT_EXEC,
-                        MAP_SHARED, g_runtime.fd, pfn * 4096);
+                        MAP_PRIVATE, g_runtime.fd, pfn*4096);
     if (mapped == MAP_FAILED)
         return NULL;
 
