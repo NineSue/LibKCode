@@ -6,7 +6,10 @@
 #include <linux/ioctl.h>
 #else
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
+typedef uint32_t __u32;
+typedef uint64_t __u64;
 #endif
 
 //dev
@@ -25,12 +28,23 @@
 #define KCAP_RB_NEXT_POSTORDER  8  // postorder next
 #define KCAP_RB_REPLACE         9
 
+//demo
+#define KCAP_JIT_DEMO           100
+
+struct kcode_reloc_entry {
+    __u32 offset; //call在页内的偏移
+    __u64 target_id;//符号id
+
+};
 
 struct kcode_sym_info {
     int cap_id;
     unsigned long pfn;
     unsigned long offset;
     size_t len;
+
+    int reloc_count;
+    struct kcode_reloc_entry relocs[4];
 };
 
 struct kcode_cap_list {

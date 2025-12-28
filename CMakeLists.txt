@@ -34,3 +34,10 @@ foreach(test_file ${TEST_KERNEL_SOURCES})
     add_executable(${test_name} ${test_file}
             lib/internal/kcode_internal.h)
 endforeach()
+
+# 测试 - tests/jit/
+file(GLOB TEST_JIT_SOURCES "tests/jit/*.c")
+foreach(test_file ${TEST_JIT_SOURCES})
+    get_filename_component(test_name ${test_file} NAME_WE)
+    add_executable(${test_name} ${test_file})
+endforeach()
