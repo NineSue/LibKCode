@@ -75,12 +75,13 @@ struct kcode_runtime {
     rb_next_postorder_fn rb_next_postorder;
     rb_replace_node_fn rb_replace_node;
 
-    // 页面缓存（按 PFN 去重）
-    struct {
+    // 页面缓存（按 PFN 去重，动态扩容）
+    struct kcode_page_entry {
         unsigned long pfn;
         void *mapped;
-    } page_cache[16];
+    } *page_cache;
     int cache_count;
+    int cache_cap;
 };
 
 extern struct kcode_runtime g_runtime;

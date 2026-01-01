@@ -1,16 +1,25 @@
 #include "kcode_ioctl.h"
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include "kcode.h"
 #include "../internal/kcode_internal.h"
 
+#define INITIAL_CACHE_CAP 16
+
+// [优化] DEBUG 宏开关控制日志输出
+#ifdef KCODE_DEBUG
+    #define kcode_log(fmt, ...) printf("[kcode]: " fmt, ##__VA_ARGS__)
+#else
+    #define kcode_log(fmt, ...) do {} while(0)
+#endif
 
 struct kcode_runtime g_runtime={.fd = -1,.inited =0};
 
-// 查找或创建页面映射（按 PFN 去重）
+// 查找或创建页面映射（按 PFN 去重，动态扩容）
 static void *get_or_map_page(unsigned long pfn) {
     // 检查缓存
     for (int i = 0; i < g_runtime.cache_count; i++) {
@@ -24,12 +33,24 @@ static void *get_or_map_page(unsigned long pfn) {
     if (mapped == MAP_FAILED)
         return NULL;
 
-    // 存入缓存
-    if (g_runtime.cache_count < 16) {
-        g_runtime.page_cache[g_runtime.cache_count].pfn = pfn;
-        g_runtime.page_cache[g_runtime.cache_count].mapped = mapped;
-        g_runtime.cache_count++;
+    // 需要扩容
+    if (g_runtime.cache_count >= g_runtime.cache_cap) {
+        int new_cap = g_runtime.cache_cap * 2;
+        struct kcode_page_entry *new_cache = realloc(
+            g_runtime.page_cache,
+            new_cap * sizeof(struct kcode_page_entry));
+        if (!new_cache) {
+            munmap(mapped, 4096);
+            return NULL;
+        }
+        g_runtime.page_cache = new_cache;
+        g_runtime.cache_cap = new_cap;
     }
+
+    // 存入缓存
+    g_runtime.page_cache[g_runtime.cache_count].pfn = pfn;
+    g_runtime.page_cache[g_runtime.cache_count].mapped = mapped;
+    g_runtime.cache_count++;
 
     return mapped;
 }
@@ -49,7 +70,7 @@ int kcode_map_symbol(int cap_id,void **func_ptr) {
     }
 
     *func_ptr = (char *)page_base + info.offset;
-    printf("[kcode]: cap=%d, func=%p (pfn=0x%lx)\n", cap_id, *func_ptr, info.pfn);
+    kcode_log("cap=%d, func=%p (pfn=0x%lx)\n", cap_id, *func_ptr, info.pfn);
     return 0;
 }
 
@@ -62,6 +83,16 @@ int kcode_init(void) {
         perror("[kcode_init]: open /dev/kcode");
         return -1;
     }
+
+    // 初始化 page cache
+    g_runtime.page_cache = malloc(INITIAL_CACHE_CAP * sizeof(struct kcode_page_entry));
+    if (!g_runtime.page_cache) {
+        close(g_runtime.fd);
+        g_runtime.fd = -1;
+        return -1;
+    }
+    g_runtime.cache_cap = INITIAL_CACHE_CAP;
+    g_runtime.cache_count = 0;
 
     if (kcode_map_symbol(KCAP_RB_INSERT,(void **)&g_runtime.rb_insert_color)<0)
         goto err;
@@ -82,10 +113,7 @@ int kcode_init(void) {
     if (kcode_map_symbol(KCAP_RB_REPLACE,(void **)&g_runtime.rb_replace_node)<0)
         goto err;
 
-
-
     g_runtime.inited=1;
-    printf("[kcode_init]: runtime initialized\n");
     return 0;
 
     err:
@@ -95,16 +123,18 @@ int kcode_init(void) {
 
 void kcode_cleanup(void) {
     for (int i = 0; i < g_runtime.cache_count; i++) {
-        if (g_runtime.page_cache[i].mapped)
+        if (g_runtime.page_cache && g_runtime.page_cache[i].mapped)
             munmap(g_runtime.page_cache[i].mapped, 4096);
     }
+    free(g_runtime.page_cache);
+    g_runtime.page_cache = NULL;
     g_runtime.cache_count = 0;
+    g_runtime.cache_cap = 0;
 
-    if (g_runtime.fd > 0) {
+    if (g_runtime.fd >= 0) {
         close(g_runtime.fd);
         g_runtime.fd = -1;
     }
 
     g_runtime.inited = 0;
-    printf("[kcode]: cleanup done\n");
 }

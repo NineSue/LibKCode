@@ -1,5 +1,6 @@
 #include <kcode.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "kcode_internal.h"
 
 //对象起始地址
@@ -43,6 +44,26 @@ void kcode_rbtree_free(kcode_rbtree_t *tree) {
     pthread_rwlock_unlock(&tree->rwlock);
     pthread_rwlock_destroy(&tree->rwlock);
     free(tree);
+}
+
+// 清空所有节点但保留树结构（内核 rbtree 无此接口）
+void kcode_rbtree_clear(kcode_rbtree_t *tree) {
+    struct rb_node *node, *next;
+
+    if (!tree)
+        return;
+
+    pthread_rwlock_wrlock(&tree->rwlock);
+
+    for (node = g_runtime.rb_first_postorder(&tree->root); node; node = next) {
+        next = g_runtime.rb_next_postorder(node);
+        free(rb_entry(node, struct managed_rb_entry, node));
+    }
+
+    tree->root = RB_ROOT;
+    tree->count = 0;
+
+    pthread_rwlock_unlock(&tree->rwlock);
 }
 
 int kcode_rbtree_insert(kcode_rbtree_t *tree, uint64_t key,kcode_ref_t handle) {
@@ -162,6 +183,32 @@ kcode_ref_t kcode_rbtree_find(kcode_rbtree_t *tree, uint64_t key) {
     }
     pthread_rwlock_unlock(&tree->rwlock);
     return result;
+}
+
+// 检查 key 是否存在（内核 rbtree 无此接口，解决 find 在 ref=0 时的歧义）
+bool kcode_rbtree_contains(kcode_rbtree_t *tree, uint64_t key) {
+    struct rb_node *node;
+    struct managed_rb_entry *entry;
+    bool found = false;
+
+    if (!tree || !g_runtime.inited)
+        return false;
+
+    pthread_rwlock_rdlock(&tree->rwlock);
+    node = tree->root.rb_node;
+    while (node) {
+        entry = rb_entry(node, struct managed_rb_entry, node);
+        if (key < entry->key) {
+            node = node->rb_left;
+        } else if (key > entry->key) {
+            node = node->rb_right;
+        } else {
+            found = true;
+            break;
+        }
+    }
+    pthread_rwlock_unlock(&tree->rwlock);
+    return found;
 }
 
 kcode_ref_t kcode_rbtree_first(kcode_rbtree_t *tree) {
@@ -307,8 +354,13 @@ kcode_ref_t kcode_rbtree_next_postorder(kcode_rbtree_t *tree,uint64_t key) {
 }
 
 size_t kcode_rbtree_size(kcode_rbtree_t *tree) {
+    size_t count;
     if (!tree)
         return 0;
 
-    return tree->count;
+    pthread_rwlock_rdlock(&tree->rwlock);
+    count = tree->count;
+    pthread_rwlock_unlock(&tree->rwlock);
+
+    return count;
 }

@@ -8,19 +8,20 @@
 static struct {
     int id;
     const char *name;
-    size_t size;
+    unsigned long pfn;     // 预缓存的 PFN
+    unsigned long offset;  // 页内偏移
 }
 whitelist[] = {
-    {KCAP_RB_INSERT,"rb_insert_color",PAGE_SIZE},
-    {KCAP_RB_ERASE,"rb_erase",PAGE_SIZE},
-    {KCAP_RB_FIRST,"rb_first",PAGE_SIZE},
-    {KCAP_RB_LAST,"rb_last",PAGE_SIZE},
-    {KCAP_RB_NEXT,"rb_next",PAGE_SIZE},
-    {KCAP_RB_PREV,"rb_prev",PAGE_SIZE},
-    {KCAP_RB_FIRST_POSTORDER,"rb_first_postorder",PAGE_SIZE},
-    {KCAP_RB_NEXT_POSTORDER,"rb_next_postorder",PAGE_SIZE},
-    {KCAP_RB_REPLACE,"rb_replace_node",PAGE_SIZE},
-    {0,NULL,0},
+    {KCAP_RB_INSERT,"rb_insert_color",0,0},
+    {KCAP_RB_ERASE,"rb_erase",0,0},
+    {KCAP_RB_FIRST,"rb_first",0,0},
+    {KCAP_RB_LAST,"rb_last",0,0},
+    {KCAP_RB_NEXT,"rb_next",0,0},
+    {KCAP_RB_PREV,"rb_prev",0,0},
+    {KCAP_RB_FIRST_POSTORDER,"rb_first_postorder",0,0},
+    {KCAP_RB_NEXT_POSTORDER,"rb_next_postorder",0,0},
+    {KCAP_RB_REPLACE,"rb_replace_node",0,0},
+    {0,NULL,0,0},
 };
 
 //查完符号对应的va就扯呼，嘿嘿
@@ -37,10 +38,9 @@ static unsigned long kcode_lookup_name(const char * name){
     return addr;
 };
 
-//给用户态物理页
+//给用户态物理页（直接返回缓存值）
 static long kcode_ioctl(struct file *file,unsigned int cmd,unsigned long arg) {
     struct kcode_sym_info info;
-    unsigned long va;
     int i;
 
     if (cmd!=KCODE_IOC_GET_SYM)
@@ -57,21 +57,28 @@ static long kcode_ioctl(struct file *file,unsigned int cmd,unsigned long arg) {
     if (!whitelist[i].name)
         return -EINVAL;
 
-    va=kcode_lookup_name(whitelist[i].name);
-
-    if (!va)
+    // 直接使用预缓存的值
+    if (!whitelist[i].pfn)
         return -ENOENT;
 
-    //转物理页
-    info.pfn=slow_virt_to_phys((void *)va)>>PAGE_SHIFT;
-    info.offset=va& ~PAGE_MASK;
-    info.len=whitelist[i].size;
+    info.pfn=whitelist[i].pfn;
+    info.offset=whitelist[i].offset;
+    info.len=PAGE_SIZE;
 
     if (copy_to_user((void __user *)arg,&info,sizeof(info)))
         return -EFAULT;
 
-    pr_info("[kcode]:%s -> PFN=0x%lx\n",whitelist[i].name,info.pfn);
     return 0;
+}
+
+//验证 PFN 是否在白名单中
+static bool kcode_pfn_valid(unsigned long pfn) {
+    int i;
+    for (i = 0; whitelist[i].name; ++i) {
+        if (whitelist[i].pfn == pfn)
+            return true;
+    }
+    return false;
 }
 
 //把物理页映射到用户态虚拟地址
@@ -80,6 +87,10 @@ static int kcode_mmap(struct file *file,struct vm_area_struct *vma) {
     size_t size=vma->vm_end - vma->vm_start;
 
     if (vma->vm_flags & VM_WRITE)
+        return -EPERM;
+
+    // 验证 PFN 是否合法
+    if (!kcode_pfn_valid(pfn))
         return -EPERM;
 
     return remap_pfn_range(vma,vma->vm_start,pfn,size,vma->vm_page_prot);
@@ -99,12 +110,36 @@ static struct miscdevice kcode_device = {
 };
 
 
+//预缓存所有符号地址
+static int kcode_cache_symbols(void) {
+    int i;
+    unsigned long va;
+
+    for (i = 0; whitelist[i].name; ++i) {
+        va = kcode_lookup_name(whitelist[i].name);
+        if (!va) {
+            pr_warn("[kcode]: failed to lookup %s\n", whitelist[i].name);
+            continue;
+        }
+        whitelist[i].pfn = slow_virt_to_phys((void *)va) >> PAGE_SHIFT;
+        whitelist[i].offset = va & ~PAGE_MASK;
+        pr_info("[kcode]: %s -> PFN=0x%lx offset=0x%lx\n",
+                whitelist[i].name, whitelist[i].pfn, whitelist[i].offset);
+    }
+    return 0;
+}
+
 static int __init kcode_init(void) {
-    int ret=misc_register(&kcode_device);
+    int ret;
+
+    // 先缓存符号
+    kcode_cache_symbols();
+
+    ret=misc_register(&kcode_device);
     if (ret) {
         return ret;
     }
-    pr_info("[kcode]:%s ready\n",KCODE_DEVICE_NAME);
+    pr_info("[kcode]: %s ready\n",KCODE_DEVICE_NAME);
     return 0;
 }
 
