@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -fPIC -O2
 INCLUDES = -Iinclude -Iinternal -I../kernel
 
-SOURCES = src/kcode_init.c src/kcode_rbtree.c
+SOURCES = src/kcode_init.c src/kcode_rbtree.c src/kcode_sort.c
 TARGET = libkcode.so
 
 all: $(TARGET)

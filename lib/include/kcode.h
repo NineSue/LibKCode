@@ -44,6 +44,34 @@ extern "C" {
 
     size_t kcode_rbtree_size(kcode_rbtree_t *tree);
 
+    //=== sort API ===
+    // 与内核 sort() 接口一致的类型定义
+    typedef int (*kcode_cmp_func_t)(const void *, const void *);
+    typedef int (*kcode_cmp_r_func_t)(const void *, const void *, const void *);
+    typedef void (*kcode_swap_func_t)(void *, void *, int);
+    typedef void (*kcode_swap_r_func_t)(void *, void *, int, const void *);
+
+    /**
+     * kcode_sort - 使用内核 heapsort 对数组排序
+     * @base: 数组起始地址
+     * @num: 元素个数
+     * @size: 每个元素的大小
+     * @cmp_func: 比较函数，返回值 <0 表示 a<b, >0 表示 a>b, =0 表示相等
+     * @swap_func: 自定义交换函数，NULL 则使用内置优化版本
+     */
+    void kcode_sort(void *base, size_t num, size_t size,
+                    kcode_cmp_func_t cmp_func,
+                    kcode_swap_func_t swap_func);
+
+    /**
+     * kcode_sort_r - 带私有数据的排序（reentrant 版本）
+     * @priv: 传递给 cmp_func 和 swap_func 的私有数据
+     */
+    void kcode_sort_r(void *base, size_t num, size_t size,
+                      kcode_cmp_r_func_t cmp_func,
+                      kcode_swap_r_func_t swap_func,
+                      const void *priv);
+
 #define KCODE_OK    0
 #define KCODE_ENOMEM (-12)
 #define KCODE_EXIST (-17)

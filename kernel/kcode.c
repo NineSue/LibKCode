@@ -12,6 +12,7 @@ static struct {
     unsigned long offset;  // 页内偏移
 }
 whitelist[] = {
+    //rb
     {KCAP_RB_INSERT,"rb_insert_color",0,0},
     {KCAP_RB_ERASE,"rb_erase",0,0},
     {KCAP_RB_FIRST,"rb_first",0,0},
@@ -21,6 +22,9 @@ whitelist[] = {
     {KCAP_RB_FIRST_POSTORDER,"rb_first_postorder",0,0},
     {KCAP_RB_NEXT_POSTORDER,"rb_next_postorder",0,0},
     {KCAP_RB_REPLACE,"rb_replace_node",0,0},
+    //sort.c
+    {KCAP_SORT,"sort",0,0},
+    {KCAP_SORT_R,"sort_r",0,0},
     {0,NULL,0,0},
 };
 

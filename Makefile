@@ -33,7 +33,7 @@ test: tests
 	tests/kernel/test_kcode
 	@echo ""
 	@echo "=== 用户库测试 ==="
-	cd tests/lib && ./test_rbtree
+	cd tests/lib && ./test_rbtree && ./test_sort
 
 # 清理
 clean:

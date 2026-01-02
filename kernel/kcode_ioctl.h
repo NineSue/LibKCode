@@ -25,6 +25,10 @@
 #define KCAP_RB_NEXT_POSTORDER  8  // postorder next
 #define KCAP_RB_REPLACE         9
 
+//sort.c
+#define KCAP_SORT               10
+#define KCAP_SORT_R             11
+
 
 struct kcode_sym_info {
     int cap_id;

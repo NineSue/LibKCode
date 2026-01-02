@@ -3,17 +3,21 @@ CFLAGS = -Wall
 INCLUDES = -I../../lib/include -I../../kernel
 LDFLAGS = -L../../lib -lkcode -lpthread -Wl,-rpath,../../lib
 
-TARGET = test_rbtree
+TARGETS = test_rbtree test_sort
 
-all: $(TARGET)
+all: $(TARGETS)
 
-$(TARGET): test_rbtree.c
+test_rbtree: test_rbtree.c
 	$(CC) $(CFLAGS) $(INCLUDES) $< $(LDFLAGS) -o $@
 
-test: $(TARGET)
-	./$(TARGET)
+test_sort: test_sort.c
+	$(CC) $(CFLAGS) $(INCLUDES) $< $(LDFLAGS) -o $@
+
+test: $(TARGETS)
+	./test_rbtree
+	./test_sort
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGETS)
 
 .PHONY: all test clean

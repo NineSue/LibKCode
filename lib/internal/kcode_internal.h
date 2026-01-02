@@ -44,6 +44,15 @@ typedef struct rb_node* (*rb_first_postorder_fn)(const struct rb_root *);
 typedef struct rb_node* (*rb_next_postorder_fn)(const struct rb_node *);
 typedef void (*rb_replace_node_fn)(struct rb_node *, struct rb_node *,struct rb_root *);
 
+//sort 函数指针类型
+typedef void (*sort_fn)(void *base, size_t num, size_t size,
+                        int (*cmp_func)(const void *, const void *),
+                        void (*swap_func)(void *, void *, int));
+typedef void (*sort_r_fn)(void *base, size_t num, size_t size,
+                          int (*cmp_func)(const void *, const void *, const void *),
+                          void (*swap_func)(void *, void *, int, const void *),
+                          const void *priv);
+
 struct kcode_runtime {
     int fd;
     int inited;
@@ -74,6 +83,12 @@ struct kcode_runtime {
     rb_first_postorder_fn rb_first_postorder;
     rb_next_postorder_fn rb_next_postorder;
     rb_replace_node_fn rb_replace_node;
+
+    //sort (使用 trampoline 修复后的代码)
+    sort_fn sort;
+    sort_r_fn sort_r;
+    void *sort_code_page;      // 存放修复后的 sort 代码
+    size_t sort_code_size;     // 代码大小
 
     // 页面缓存（按 PFN 去重，动态扩容）
     struct kcode_page_entry {
