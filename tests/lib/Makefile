@@ -6,7 +6,7 @@ INCLUDES = -I../../lib/include -I../../lib/internal -I../../kernel
 LDFLAGS = -L../../lib -lkcode -lpthread -Wl,-rpath,../../lib
 
 TARGETS = test_rbtree test_sort test_rbtree_stress test_rbtree_advanced
-BENCH = final_bench
+BENCH = benchmark
 
 all: $(TARGETS)
 
@@ -23,7 +23,7 @@ test_rbtree_advanced: test_rbtree_advanced.c rbtree_checker.h
 	$(CC) $(CFLAGS) $(INCLUDES) $< $(LDFLAGS) -o $@
 
 # 性能对标测试 (C++)
-$(BENCH): final_bench.cpp
+$(BENCH): benchmark.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(LDFLAGS) -o $@
 
 bench: $(BENCH)

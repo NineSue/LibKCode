@@ -1,8 +1,8 @@
 /*
- * final_bench.cpp - LibKCode vs C++ STL 性能对标测试
+ * benchmark.cpp - LibKCode vs C++ STL 性能对标测试
  *
- * 编译: g++ -O3 final_bench.cpp -I../../lib/include -L../../lib -lkcode -lpthread -Wl,-rpath,../../lib -o final_bench
- * 运行: ./final_bench [节点数量，默认100万]
+ * 编译: g++ -O3 benchmark.cpp -I../../lib/include -L../../lib -lkcode -lpthread -Wl,-rpath,../../lib -o benchmark
+ * 运行: ./benchmark [节点数量，默认100万]
  */
 #include <iostream>
 #include <map>
@@ -12,6 +12,7 @@
 #include <numeric>
 #include <random>
 #include <cstdlib>
+#include <cstring>
 
 extern "C" {
 #include <kcode.h>
@@ -29,17 +30,18 @@ double measure_ms(Func f) {
     return duration_cast<microseconds>(end - start).count() / 1000.0;
 }
 
-void run_benchmark(size_t N) {
+// kcode_sort 的比较函数
+static int cmp_int(const void* a, const void* b) {
+    return *(int*)a - *(int*)b;
+}
+
+void run_rbtree_benchmark(size_t N, mt19937& gen) {
     cout << "\n========================================" << endl;
-    cout << "  Benchmark: " << N << " nodes" << endl;
+    cout << "  RB-Tree Benchmark: " << N << " nodes" << endl;
     cout << "========================================\n" << endl;
 
-    // 准备随机数据
     vector<uint64_t> keys(N);
     iota(keys.begin(), keys.end(), 0);
-
-    random_device rd;
-    mt19937 gen(rd());
     shuffle(keys.begin(), keys.end(), gen);
 
     double stl_insert = 0, stl_find = 0, stl_erase = 0;
@@ -75,12 +77,10 @@ void run_benchmark(size_t N) {
     }
 
     cout << endl;
-
-    // 重新打乱
     shuffle(keys.begin(), keys.end(), gen);
 
     // === LibKCode ===
-    cout << "[LibKCode] (Kernel binary transplant)" << endl;
+    cout << "[LibKCode RB-Tree] (Kernel binary)" << endl;
     {
         kcode_rbtree_t* tree = kcode_rbtree_new();
 
@@ -111,10 +111,56 @@ void run_benchmark(size_t N) {
     }
 
     // === 对比结果 ===
-    cout << "\n--- Comparison ---" << endl;
-    cout << "  Insert: LibKCode is " << (stl_insert / kcode_insert) << "x vs STL" << endl;
-    cout << "  Find:   LibKCode is " << (stl_find / kcode_find) << "x vs STL" << endl;
-    cout << "  Erase:  LibKCode is " << (stl_erase / kcode_erase) << "x vs STL" << endl;
+    cout << "\n--- RB-Tree Comparison ---" << endl;
+    printf("  Insert: LibKCode is %.2fx vs STL\n", stl_insert / kcode_insert);
+    printf("  Find:   LibKCode is %.2fx vs STL\n", stl_find / kcode_find);
+    printf("  Erase:  LibKCode is %.2fx vs STL\n", stl_erase / kcode_erase);
+}
+
+void run_sort_benchmark(size_t N, mt19937& gen) {
+    cout << "\n========================================" << endl;
+    cout << "  Sort Benchmark: " << N << " elements" << endl;
+    cout << "========================================\n" << endl;
+
+    vector<int> data(N);
+    for (size_t i = 0; i < N; i++) data[i] = gen();
+
+    // === C++ std::sort ===
+    cout << "[C++ std::sort] (Introsort, O3)" << endl;
+    {
+        vector<int> d = data;
+        double t = measure_ms([&]() {
+            sort(d.begin(), d.end());
+        });
+        cout << "  Time: " << t << " ms" << endl;
+    }
+
+    // === C qsort ===
+    cout << "[C qsort]" << endl;
+    {
+        vector<int> d = data;
+        double t = measure_ms([&]() {
+            qsort(d.data(), N, sizeof(int), [](const void* a, const void* b) {
+                return *(int*)a - *(int*)b;
+            });
+        });
+        cout << "  Time: " << t << " ms" << endl;
+    }
+
+    // === LibKCode (Kernel heapsort) ===
+    cout << "[LibKCode sort] (Kernel heapsort)" << endl;
+    {
+        vector<int> d = data;
+        double t = measure_ms([&]() {
+            kcode_sort(d.data(), N, sizeof(int), cmp_int, nullptr);
+        });
+        cout << "  Time: " << t << " ms" << endl;
+    }
+
+    cout << "\n--- Sort Characteristics ---" << endl;
+    cout << "  std::sort:   Fast (Introsort), O(log n) stack space" << endl;
+    cout << "  qsort:       Portable, function pointer overhead" << endl;
+    cout << "  kcode_sort:  O(1) space, O(n log n) guaranteed, no recursion" << endl;
 }
 
 int main(int argc, char** argv) {
@@ -125,7 +171,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    run_benchmark(n);
+    random_device rd;
+    mt19937 gen(rd());
+
+    run_rbtree_benchmark(n, gen);
+    run_sort_benchmark(n, gen);
+
+    cout << "\n========================================" << endl;
+    cout << "  Benchmark Complete" << endl;
+    cout << "========================================" << endl;
 
     kcode_cleanup();
     return 0;
