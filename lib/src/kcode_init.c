@@ -87,37 +87,60 @@ static int kcode_get_sym_info(int cap_id, struct kcode_sym_info *info) {
 }
 
 /**
- * patch_sort_stack_protector - 移除 sort 函数的栈保护代码
+ * find_gs_access - 在代码中查找 gs:0x28 访问指令
  *
- * 内核 sort() 编译时启用了 stack protector，会访问 gs:0x28（内核栈 canary）
- * 这在用户态无法工作，需要 NOP 掉这些指令
+ * 模式: 65 48 8b 04 25 28 00 00 00  (mov rax, gs:0x28)
+ *       65 48 2b 04 25 28 00 00 00  (sub rax, gs:0x28)
  *
- * 原始代码结构：
- *   0x08-0x10: mov rax, gs:0x28      ; 读取 canary
- *   0x11-0x14: mov [rbp-8], rax      ; 保存 canary
- *   ...
- *   0x30-0x33: mov rax, [rbp-8]      ; 取回 canary
- *   0x34-0x3c: sub rax, gs:0x28      ; 比较 canary
- *   0x3d-0x3e: jne __stack_chk_fail  ; 不匹配则跳转
- *   ...
- *   0x55-0x59: call __stack_chk_fail ; 页外调用
- *
- * Patch 策略：全部替换为 NOP (0x90)
+ * 返回找到的偏移量，-1 表示未找到
  */
-static void patch_sort_stack_protector(unsigned char *sort_code) {
-    // Patch 1: [0x08, 0x15) - 13 bytes
-    // mov rax, gs:0x28 (9 bytes) + mov [rbp-8], rax (4 bytes)
-    memset(sort_code + 0x08, 0x90, 13);
+static int find_gs_access(unsigned char *code, size_t len, size_t start) {
+    for (size_t i = start; i + 9 <= len; i++) {
+        if (code[i] == 0x65 && code[i+1] == 0x48 &&
+            (code[i+2] == 0x8b || code[i+2] == 0x2b) &&
+            code[i+3] == 0x04 && code[i+4] == 0x25 &&
+            code[i+5] == 0x28 && code[i+6] == 0x00 &&
+            code[i+7] == 0x00 && code[i+8] == 0x00) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
 
-    // Patch 2: [0x30, 0x3f) - 15 bytes
-    // mov rax, [rbp-8] (4 bytes) + sub rax, gs:0x28 (9 bytes) + jne (2 bytes)
-    memset(sort_code + 0x30, 0x90, 15);
+/**
+ * patch_sort_stack_protector - 动态检测并移除栈保护代码
+ *
+ * 自动查找 gs:0x28 访问指令并 NOP 掉相关代码块，兼容不同内核版本
+ */
+static void patch_sort_stack_protector(unsigned char *sort_code, size_t code_len) {
+    int patched = 0;
 
-    // Patch 3: [0x55, 0x5a) - 5 bytes
-    // call __stack_chk_fail (5 bytes)
-    memset(sort_code + 0x55, 0x90, 5);
+    // 查找第一个 gs:0x28 访问 (mov rax, gs:0x28)
+    int pos1 = find_gs_access(sort_code, code_len, 0);
+    if (pos1 >= 0) {
+        // NOP 掉 mov rax, gs:0x28 (9 bytes) + mov [rbp-8], rax (4 bytes)
+        memset(sort_code + pos1, 0x90, 13);
+        printf("[kcode] patched gs access at offset 0x%x (13 bytes)\n", pos1);
+        patched++;
 
-    kcode_log("sort stack protector patched\n");
+        // 查找第二个 gs:0x28 访问 (sub rax, gs:0x28)
+        int pos2 = find_gs_access(sort_code, code_len, pos1 + 13);
+        if (pos2 >= 0) {
+            // NOP: mov rax,[rbp-8] (4 bytes) + sub rax,gs:0x28 (9 bytes) + jne (2 bytes)
+            int patch_start = pos2 - 4;
+            if (patch_start >= 0) {
+                memset(sort_code + patch_start, 0x90, 15);
+                printf("[kcode] patched gs check at offset 0x%x (15 bytes)\n", patch_start);
+                patched++;
+            }
+        }
+    }
+
+    if (patched > 0) {
+        printf("[kcode] stack protector patched (%d locations)\n", patched);
+    } else {
+        printf("[kcode] no stack protector found (may be disabled in kernel)\n");
+    }
 }
 
 /**
@@ -171,7 +194,12 @@ static int kcode_init_sort(void) {
     memcpy(code_page, kernel_page, SORT_CODE_PAGE_SIZE);
 
     // === 二进制 patch：移除栈保护代码 ===
-    patch_sort_stack_protector((unsigned char *)code_page + sort_info.offset);
+    // 计算 sort 函数的大小（到页末尾或到 sort_r 开头）
+    size_t sort_size = SORT_CODE_PAGE_SIZE - sort_info.offset;
+    if (sort_r_info.offset > sort_info.offset) {
+        sort_size = sort_r_info.offset - sort_info.offset;
+    }
+    patch_sort_stack_protector((unsigned char *)code_page + sort_info.offset, sort_size);
 
     // 设置函数指针（在用户态页中的对应位置）
     g_runtime.sort = (sort_fn)((char *)code_page + sort_info.offset);
