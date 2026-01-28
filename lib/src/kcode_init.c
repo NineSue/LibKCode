@@ -18,7 +18,7 @@ static int kcode_get_sym_info(int cap_id, struct kcode_sym_info *info) {
     return ioctl(g_runtime.fd, KCODE_IOC_GET_SYM, info);
 }
 
-/* 2. RB-Tree 映射：保持连续性 */
+/* 2. RB-Tree 映射：复制到用户态内存执行 */
 static int kcode_map_rbtree(const int *caps, int count, void **ptrs[]) {
     struct kcode_sym_info infos[count];
     unsigned long min_pfn = ~0UL, max_pfn = 0;
@@ -30,18 +30,29 @@ static int kcode_map_rbtree(const int *caps, int count, void **ptrs[]) {
     }
 
     size_t total_size = (max_pfn - min_pfn + 1) * 4096;
-    void *base = mmap(NULL, total_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (base == MAP_FAILED) return -1;
 
-    for (unsigned long pfn = min_pfn; pfn <= max_pfn; pfn++) {
-        void *target = (char *)base + (pfn - min_pfn) * 4096;
-        mmap(target, 4096, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, g_runtime.fd, pfn * 4096);
+    // 1. 申请用户态 RWX 内存
+    void *u_map = mmap(NULL, total_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (u_map == MAP_FAILED) return -1;
+
+    // 2. 映射内核页用于读取
+    void *k_map = mmap(NULL, total_size, PROT_READ, MAP_PRIVATE,
+                       g_runtime.fd, min_pfn * 4096);
+    if (k_map == MAP_FAILED) {
+        munmap(u_map, total_size);
+        return -1;
     }
 
-    g_runtime.rbtree_base = base;
+    // 3. 复制内核代码到用户态
+    memcpy(u_map, k_map, total_size);
+    munmap(k_map, total_size);
+
+    g_runtime.rbtree_base = u_map;
     g_runtime.rbtree_size = total_size;
+
     for (int i = 0; i < count; i++) {
-        *ptrs[i] = (char *)base + (infos[i].pfn - min_pfn) * 4096 + infos[i].offset;
+        *ptrs[i] = (char *)u_map + (infos[i].pfn - min_pfn) * 4096 + infos[i].offset;
     }
     return 0;
 }
